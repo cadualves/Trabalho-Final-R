@@ -1,25 +1,272 @@
 ---
 title: "Projeto Final R"
-author: "Carlos Eduardo Alves Perira"
-date: "16/06/2020"
+author: "Carlos Eduardo Alves Pereira"
+date: "14/06/2020"
 output: pdf_document
 ---
+# HIV/AIDS no Brasil, uma visualização usando R
+## Introdução
 
-```{r}
-#install.packages("readxl") talvez tenha que instalar esse
-library(dplyr)
+  O trabalho em questão é uma implementação das diversas ferramentas abordadas em aula e nas monitorias da disciplina introdução ao R aplicado em ciência de dados, ele consiste em uma visualização de um banco de dados HIV/AIDS oferecido pelo governo brasileiro. O banco de dados possui variáveis como número de novos casos, número de morte, escolaridade, entre outros. 
+
+## Inspiração
+
+  Sabendo da grande problemática que o HIV/AIDS representa na comunidade LGBT+, esse trabalho tem por objetivo sanar algumas dúvidas quanto a esse tema. As dúvidas são:
+  
+- Qual a relação entre novos casos e os óbitos por HIV? 
+- A infeção é mais disseminada em uma determinada população de acordo com a cor/raça? De acordo com orientação sexual? 
+- Quais são os estados com maiores taxas de infecção? 
+
+## Quanto a base de dados
+
+  A base de dados veio em um compilado de todos os dados em uma única aba. Então, manualmente foi separado cada informação em uma aba, para que assim pudesse abrir os dados em R de forma mais fácil. Ela é lida com a função `read_excel` selecionando  a aba específica. 
+  
+  A segunda base de dados foi feita manualmente, coletando o dado de cada estado durante o período de 2007 a 2019. Os dados foram coletados no mesmo site do governo brasileiro. 
+
+
+### Bibliotecas usadas
+
+```{r, message=FALSE}
 library(stringr)
-library(readxl)
+require(readxl)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(gridExtra)
+library(reshape2)
+library("RColorBrewer")    
+library("sp")
 
-casos <- read_excel("Brasil-HIV.xlsx", sheet= "casos") #abrindo uma aba especifica do Banco de dados
-casos<-data.frame(casos) #transformando em data frame
-names(casos)<- str_remove(names(casos),"X") #removendo o X dos títulos das colunas
-head(casos)
-mortes <- read_excel("Brasil-HIV.xlsx", sheet="obitos")
+```
+
+### Abrindo o arquivo
+
+```{r, message=FALSE}
+casos<-read_excel("Brasil-HIV.xlsx", sheet="casos") 
+#abrindo uma aba especifica do Banco de dados
+casos<-data.frame(casos) 
+#transformando em data frame
+names(casos)<- str_remove(names(casos),"X") 
+#removendo o X dos títulos das colunas
+
+mortes<-read_excel("Brasil-HIV.xlsx", sheet="obitos")
 mortes<-data.frame(mortes)
 names(mortes)<- str_remove(names(mortes),"X")
-head(mortes)
+
+```
+
+### Preparando os dados
+
+```{r}
+casos_total<-filter(casos, Casos.de.AIDS=="Total") 
+#filtrando para pegar apenas o total
+casos_filtrado<-select(casos_total,starts_with("20"))  
+#tirando o acumulado e deixando só os anos
+casos_filtrado<- as.data.frame(t(casos_filtrado))
+#transformando linha em coluna
+names(casos_filtrado)[1]<-"total" 
+#renomeando linha
+
+mortes_total<-filter(mortes, ...1=="Óbitos por AIDS")
+mortes_filtrado<-select(mortes_total,starts_with("20"))
+mortes_filtrado<-as.data.frame(t(mortes_filtrado))
+names(mortes_filtrado)[1]<-"total"
+
+
+head(casos_filtrado)
+head(mortes_filtrado)
+
+```
+
+```{r,warning=FALSE}
+ggplot()+
+  geom_line(data=casos_filtrado, aes(x=as.numeric(rownames(casos_filtrado)), y= total), 
+            color = "blue", linetype=1)+
+  geom_line(data=mortes_filtrado, aes(x=as.numeric(rownames(mortes_filtrado)), y= total),
+            color= "red", linetype= 2)+
+  geom_point(data=casos_filtrado,aes(x=as.numeric(rownames(casos_filtrado)), y=total, 
+                                     color="casos novos"), fill="red", shape=16)  + 
+  geom_point(data=mortes_filtrado, aes(x=as.numeric(rownames(mortes_filtrado)), y=total, 
+                                       color="mortes"), size=2, shape=16)  +
+  scale_color_manual("Legenda", breaks=c("casos novos", "mortes"), values = c("blue","red"))+
+  scale_x_continuous(breaks = seq(2007,2019,2), limits = c(2007,2019))+
+  scale_y_continuous(breaks= seq(0,45000,5000), limits=c(0,45000))+
+  labs(title= "Mortes e Novos Casos", x= "Anos", y= "Pessoas")+
+  theme(plot.title = element_text(hjust=0.5))+
+  geom_line(aes(x=2012,y=seq(0,50000)))+
+  geom_line(aes(x=2018,y=seq(0,50000)))+
+  theme_set(theme_bw())
+```
+
+## Análise 
+
+  Em 2012 o governo brasileiro estendeu o uso da PEP (profilaxia pós exposição ao HIV), que antes era somente usada por profissionais da saúde, para toda a população. No entanto, não podemos ver o impacto disso no gráfico. 
+  
+  Em janeiro de 2018 o governo brasileiro lançou mão de mais uma ferramenta para conter o vírus HIV. O medicamento chamado de PREP (profilaxia pré exposição ao HIV), o qual é composto de dois comprimidos ingeridos diariamente pelo indivíduo e o torna imune ao vírus HIV. 
+Um ano após o lançamento desse método, podemos ver uma redução drástica na incidência de novos casos, nos fazendo tender a afirmativa de que a PREP teve efeitos positivos na sociedade.
+
+  Quanto ao número de óbitos podemos ver uma certa constância, o que já era esperado, visto que, atualmente, diante de tantos medicamentos e uma pesquisa já avançada, a doença já não mata como antes.  
+
+
+```{r}
+cor<-read_excel("Brasil-HIV.xlsx", sheet = "cor")
+cor<-data.frame(cor)
+names(cor)<- str_remove(names(cor),"X")
+cor_filtrada<-select(cor,-c(names(cor)[2],names(cor)[3]))
+# estou apenas tirando os dados acumulados e total
+
+cor_novo<-melt(cor_filtrada, id.vars = c(names(cor_filtrada[1])), value.name= "proporcao")
+#arrumando o dado para a plotagem
+names(cor_novo)[2]<-paste("ano")
+names(cor_novo)[1]<-paste("Cor.ou.Raca")
+#renomeando os nomes das colunas
+cor_novo
+```
+
+
+
+
+```{r}
+ggplot()+
+  geom_bar(data= cor_novo, aes(y=proporcao, x=ano, fill= Cor.ou.Raca), stat="identity")
+
+```
+
+## Análise
+
+Nesse caso, podemos ver que percentualmente a população autodeclarada branca e a parda, são onde encontramos a maior incidência do vírus. 
+
+```{r}
+
+expo<-read_excel("Brasil-HIV.xlsx", sheet = 'exposicao2')
+exposicao<-data.frame(expo)
+exposicao_total<-select(exposicao, c(names(exposicao)[1],names(exposicao)[2]))
+exposicao_total
+
+```
+
+Em vista de tentar usar o maior número de ferramentas e para a elaboração de um gráfico de pizza, usamos o looping `for` para transformar o data frame em duas listas.
+
+```{r}
+y=c()
+labels=c()
+for(i in 1:length(exposicao_total[,2])){
+  y[i]=exposicao_total[i,2]
+  labels[i]=paste(exposicao_total[i,1], y[i], "%", sep=" ")
+}
+y
+labels
+```  
+
+
+```{r, include=FALSE}
+#O gráfico de pizza ficava muito junto alguns valores, então espalhei eles manualmente
+#apenas inverti as ordens que apareciam 
+
+aux1<-y[1]
+aux3<-y[3]
+aux4<-y[4]
+aux5<-y[5]
+
+auxi1<-labels[1]
+auxi3<-labels[3]
+auxi4<-labels[4]
+auxi5<-labels[5]
+
+
+labels[1]<-auxi4
+labels[3]<-auxi5
+labels[4]<-auxi1
+labels[5]<-auxi3
+
+y[1]<-aux4
+y[3]<-aux5
+y[4]<-aux1
+y[5]<-aux3
+
+```
+
+```{r}
+pie(y,main="Exposição ao vírus",labels, col=rainbow(7))
+
+```
+
+## Análise
+
+  Quanto ao modo de exposição do vírus, obtemos algo muito interessante. A população de HSH que são homens que fazem sexo com homens e a população de heterossexuais têm praticamente a mesma fatia do gráfico de pizza, o que indica uma mesma proporção de contágio, quebrando assim o estigma de que os gays seriam o foco da doença.
+
+  Em seguida temos o modo de exposição ignorado, o qual não nos informa nada, e após esse temos o UDI (usuários de drogas injetáveis) representando uma boa fatia da população, mostrando assim que essa infecção não pertence a uma sexualidade, e muito menos está limitada a isso. 
+
+```{r}
+br<-read_excel("Estados-HIV.xlsx", col_names = TRUE)
+br<-data.frame(br)
+names(br)<- str_remove(names(br),"X")
+br<-select(br,c(names(br)[1],names(br)[2]))
+head(br)
+```
+ 
+ 
+ 
+ 
+```{r, include=FALSE}
+brasil  <- url("https://sites.google.com/site/cbee2014reb/r-data/BRA_adm1.RData")
+print(load(brasil))
+close(brasil)
+```
+
+
+```{r}
+
+#transformando em vetor
+estados_des  <- c()
+for (i in 1:27){
+  estados_des[i] <- br$Total[i]
+} 
+
+#fazendo log pois os dados são muito dispersos
+estados_des<- log(estados_des)
+
+freq <- estados_des
+
+#estabelecendo a frequência 
+cutfreq  <- cut(freq, 6) 
+
+#definindo os intervalos da legenda 
+levels(cutfreq)  <- c("<2800", "3171-7470", "8168-16616", "18928-35843", 
+                      "47469-95558",">128357")
+
+gadm$freq <- cutfreq 
+
+#a paleta de cor
+col  <- brewer.pal(6, "PuRd") 
+
+#o plot
+spplot(gadm, "freq", main = "Número de Casos por Estado", 
+       col.regions=col, col= 'white', border="black", 
+       par.settings = list(axis.line = list(col = 'purple'))) 
+
+
 
 
 ```
+
+## Análise
+
+Através desta visualização é perceptível uma maior concentração dos casos no eixo sul e sudeste, em especial para os dois estados com a maior população do Brasil que são Rio de Janeiro e São Paulo. 
+
+Com essas informações, torna-se mais fácil um direcionamento no investimento estatal ao combate do vírus HIV. Além disso, cria um alerta para as populações desses locais, pois estão em uma espécie de epicentro do vírus. 
+
+
+## Referências
+
+Coleta dos dados: http://indicadores.aids.gov.br/
+
+Codigo do mapa: aula do dia 13/04/2020
+
+GitHub do trabalho: https://github.com/cadualves/Trabalho-Final-R
+
+Dúvidas: https://stackoverflow.com/
+
+Gráfico de Barras empilhadas: https://www.youtube.com/results?search_query=stacked+bar+chart+R
 
